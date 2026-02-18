@@ -63,7 +63,7 @@ const HeroBanner = () => {
           key={i}
           src={s.image}
           alt={s.title}
-          className={`absolute inset-0 w-full h-full object-cover object-top transition-opacity duration-700 ${i === current ? "opacity-100" : "opacity-0"}`}
+          className={`absolute inset-0 w-full h-full object-contain bg-black transition-opacity duration-700 ${i === current ? "opacity-100" : "opacity-0"}`}
           onError={(e) => { (e.target as HTMLImageElement).src = heroBanner; }}
         />
       ))}

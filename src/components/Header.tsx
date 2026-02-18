@@ -23,9 +23,8 @@ const navLinks = [
 const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, showLogin, setShowLogin } = useAuth();
   const isAdmin = user?.email === ADMIN_EMAIL;
-  const [showLogin, setShowLogin] = useState(false);
   const [showSubscribe, setShowSubscribe] = useState(false);
   const [subscribeMode, setSubscribeMode] = useState<"user" | "agent">("user");
   const [showAgentAccess, setShowAgentAccess] = useState(false);

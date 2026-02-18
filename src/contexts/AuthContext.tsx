@@ -20,6 +20,8 @@ interface AuthContextType {
   register: (email: string, password: string, name: string, phone: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
+  showLogin: boolean;
+  setShowLogin: (show: boolean) => void;
   // Agent context
   agentData: AgentItem | null;
   setAgentData: (data: AgentItem | null) => void;
@@ -36,6 +38,7 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showLogin, setShowLogin] = useState(false);
   const [agentData, setAgentData] = useState<AgentItem | null>(null);
 
   useEffect(() => {
@@ -77,7 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, logout, agentData, setAgentData }}>
+    <AuthContext.Provider value={{ user, loading, login, register, loginWithGoogle, logout, agentData, setAgentData, showLogin, setShowLogin }}>
       {children}
     </AuthContext.Provider>
   );
