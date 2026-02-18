@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Drama } from "@/data/dramas";
 import SubscribeModal from "@/components/SubscribeModal";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface DramaCardProps {
   drama: Drama;
@@ -10,6 +12,7 @@ interface DramaCardProps {
 
 const DramaCard = ({ drama, showRank }: DramaCardProps) => {
   const navigate = useNavigate();
+  const { user, setShowLogin } = useAuth();
   const [showSubscribe, setShowSubscribe] = useState(false);
 
   // Check if agent content still within 5 days
@@ -21,6 +24,12 @@ const DramaCard = ({ drama, showRank }: DramaCardProps) => {
   })();
 
   const handleClick = () => {
+    if (!user) {
+      setShowLogin(true);
+      toast.info("Please login to start watching");
+      return;
+    }
+
     if (isStillAgent) {
       // Show agent subscribe modal
       setShowSubscribe(true);
