@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Film, Tv, PlayCircle, Image, Radio, Activity,
   Users, ShieldCheck, Wallet, ChevronLeft, ChevronRight, Plus, Pencil,
   Trash2, Ban, CheckCircle, Eye, Search, Download, X, Star, Clock,
-  ArrowUpDown, AlertTriangle, RefreshCw, Newspaper
+  ArrowUpDown, AlertTriangle, RefreshCw, Newspaper, ArrowDownToLine
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,7 @@ import {
   addLatestUpdate, updateLatestUpdate, deleteLatestUpdate,
   updateAgent, deleteAgent,
   updateUser, deleteUser,
-  deleteTransaction,
+  deleteTransaction, addTransaction,
 } from "@/lib/firebaseServices";
 
 type Section = "overview" | "series" | "movies" | "episodes" | "carousel" | "tv-channels" | "latest-updates" | "activity" | "agents" | "users" | "wallet";
@@ -229,7 +229,7 @@ const SeriesSection = ({ series, search }: { series: SeriesItem[]; search: strin
       <FormField label="Poster URL" value={form.posterUrl || ""} onChange={v => setForm({ ...form, posterUrl: v })} />
       <FormField label="Description" value={form.description || ""} onChange={v => setForm({ ...form, description: v })} multiline />
       <FormField label="Genre (comma separated)" value={form.genre || ""} onChange={v => setForm({ ...form, genre: v })} />
-      <FormField label="Actors (comma separated)" value={form.actors || ""} onChange={v => setForm({ ...form, actors: v })} />
+      <FormField label="Actors (name|imageUrl, comma separated)" value={form.actors || ""} onChange={v => setForm({ ...form, actors: v })} placeholder="Actor Name|https://image.url, Actor 2" />
       <FormField label="Total Episodes" value={String(form.totalEpisodes || "")} onChange={v => setForm({ ...form, totalEpisodes: parseInt(v) || 0 })} />
       <FormField label="Rating (0-10)" value={String(form.rating || "")} onChange={v => setForm({ ...form, rating: parseFloat(v) || 0 })} />
       <div className="mb-2">
@@ -340,7 +340,7 @@ const MoviesSection = ({ movies, search }: { movies: MovieItem[]; search: string
       <FormField label="Download Link (optional)" value={form.downloadLink || ""} onChange={v => setForm({ ...form, downloadLink: v })} />
       <FormField label="Description" value={form.description || ""} onChange={v => setForm({ ...form, description: v })} multiline />
       <FormField label="Genre (comma separated)" value={form.genre || ""} onChange={v => setForm({ ...form, genre: v })} />
-      <FormField label="Actors (comma separated)" value={form.actors || ""} onChange={v => setForm({ ...form, actors: v })} />
+      <FormField label="Actors (name|imageUrl, comma separated)" value={form.actors || ""} onChange={v => setForm({ ...form, actors: v })} placeholder="Actor Name|https://image.url, Actor 2" />
       <FormField label="Rating (0-10)" value={String(form.rating || "")} onChange={v => setForm({ ...form, rating: parseFloat(v) || 0 })} />
       <div className="mb-2">
         <p className="text-xs font-medium text-foreground mb-2">Display Sections (check all that apply)</p>
@@ -920,6 +920,11 @@ const WalletSection = ({ transactions, search }: { transactions: WalletTransacti
   const filtered = transactions.filter(t => t.userName.toLowerCase().includes(search.toLowerCase()) || t.type.includes(search.toLowerCase()));
   const totalBalance = transactions.filter(t => t.status === "completed").reduce((sum, t) => t.type === "withdrawal" ? sum - t.amount : sum + t.amount, 0);
   const { toast } = useToast();
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawNumber, setWithdrawNumber] = useState("");
+  const [withdrawProvider, setWithdrawProvider] = useState("MTN Mobile Money");
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const deleteFailed = async () => {
     const failed = transactions.filter(t => t.status === "failed");
@@ -927,9 +932,41 @@ const WalletSection = ({ transactions, search }: { transactions: WalletTransacti
     toast({ title: "Failed transactions cleared" });
   };
 
+  const handleAdminWithdraw = async () => {
+    const amt = parseInt(withdrawAmount);
+    if (!amt || amt < 1000 || amt > totalBalance) {
+      toast({ title: "Invalid amount", description: amt > totalBalance ? "Insufficient balance" : "Min UGX 1,000", variant: "destructive" });
+      return;
+    }
+    if (!withdrawNumber) {
+      toast({ title: "Enter phone number", variant: "destructive" });
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      await addTransaction({
+        userId: "admin",
+        userName: "Admin",
+        userPhone: withdrawNumber,
+        type: "withdrawal",
+        amount: amt,
+        status: "completed",
+        method: withdrawProvider,
+        createdAt: new Date().toISOString().split("T")[0],
+      } as any);
+      setShowWithdraw(false);
+      setWithdrawAmount("");
+      setWithdrawNumber("");
+      toast({ title: "Withdrawal successful!", description: `UGX ${amt.toLocaleString()} sent to ${withdrawProvider}` });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+    setIsProcessing(false);
+  };
+
   return (
     <div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
         <div className="bg-card border border-border rounded-xl p-4">
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Total Balance</p>
           <p className="text-xl font-bold text-primary">{totalBalance.toLocaleString()} UGX</p>
@@ -947,7 +984,50 @@ const WalletSection = ({ transactions, search }: { transactions: WalletTransacti
             <Trash2 className="w-3 h-3 mr-1" /> Clear Failed
           </Button>
         </div>
+        <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Withdraw</p>
+            <p className="text-xs text-muted-foreground">Admin funds</p>
+          </div>
+          <Button size="sm" className="h-7 text-[10px] gap-1" onClick={() => setShowWithdraw(true)}>
+            <ArrowDownToLine className="w-3 h-3" /> Withdraw
+          </Button>
+        </div>
       </div>
+
+      {/* Admin Withdraw Modal */}
+      {showWithdraw && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowWithdraw(false)}>
+          <div className="bg-card border border-border rounded-xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-foreground mb-1">Admin Withdraw</h3>
+            <p className="text-muted-foreground text-[10px] mb-4">Available: <span className="text-primary font-bold">UGX {totalBalance.toLocaleString()}</span></p>
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="text-muted-foreground text-[10px] block mb-1">Amount (UGX)</label>
+                <Input className="h-9 text-xs bg-secondary border-border" type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} placeholder="Min 1,000" />
+              </div>
+              <div>
+                <label className="text-muted-foreground text-[10px] block mb-1">Mobile Money Number</label>
+                <Input className="h-9 text-xs bg-secondary border-border" type="tel" value={withdrawNumber} onChange={e => setWithdrawNumber(e.target.value)} placeholder="e.g. 0771234567" />
+              </div>
+              <div>
+                <label className="text-muted-foreground text-[10px] block mb-1">Provider</label>
+                <select value={withdrawProvider} onChange={e => setWithdrawProvider(e.target.value)}
+                  className="w-full h-9 rounded-lg border border-border bg-secondary text-foreground text-xs px-3">
+                  <option>MTN Mobile Money</option>
+                  <option>Airtel Money</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setShowWithdraw(false)}>Cancel</Button>
+              <Button size="sm" className="h-8 text-xs" onClick={handleAdminWithdraw} disabled={isProcessing || !withdrawAmount || !withdrawNumber}>
+                {isProcessing ? "Processing..." : "Withdraw"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <table className="w-full text-xs">
           <thead><tr className="border-b border-border bg-secondary/50">

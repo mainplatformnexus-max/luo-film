@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import Header from "./components/Header";
+import MobileNavBar from "./components/MobileNavBar";
 import Index from "./pages/Index";
 import Watch from "./pages/Watch";
 import Movies from "./pages/Movies";
@@ -38,6 +39,7 @@ const App = () => (
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <MobileNavBar />
         </BrowserRouter>
       </AuthProvider>
     </TooltipProvider>
