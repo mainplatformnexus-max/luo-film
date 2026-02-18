@@ -163,6 +163,11 @@ const Agent = () => {
     }
     setIsProcessing(true);
     try {
+      const { livraWithdraw } = await import("@/lib/livraPayment");
+      const result = await livraWithdraw(withdrawNumber, amt, `LUO FILM Agent Withdrawal - ${agentData.agentId}`);
+      if (!result.success && result.message) {
+        throw new Error(result.message);
+      }
       await updateAgent(agentData.id, { balance: agentBalance - amt });
       await addTransaction({
         userId: agentData.id,
@@ -171,16 +176,16 @@ const Agent = () => {
         type: "withdrawal",
         amount: amt,
         status: "completed",
-        method: withdrawProvider,
+        method: `${withdrawProvider} (Livra)`,
         createdAt: new Date().toISOString().split("T")[0],
       } as any);
       setAgentData({ ...agentData, balance: agentBalance - amt });
       setShowWithdrawModal(false);
       setWithdrawAmount("");
       setWithdrawNumber("");
-      toast({ title: "Withdrawal initiated!", description: `UGX ${amt.toLocaleString()} sent to ${withdrawProvider}` });
+      toast({ title: "Withdrawal successful!", description: `UGX ${amt.toLocaleString()} sent via Livra` });
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Withdrawal Failed", description: err.message, variant: "destructive" });
     }
     setIsProcessing(false);
   };
@@ -189,6 +194,14 @@ const Agent = () => {
     if (!renewNumber || !agentData) return;
     setIsProcessing(true);
     try {
+      const { livraDeposit, pollPaymentStatus } = await import("@/lib/livraPayment");
+      const depositResult = await livraDeposit(renewNumber, renewPrice, `LUO FILM Agent Renewal - ${renewPlan === "month" ? "Monthly" : "Weekly"}`);
+      if (!depositResult.internal_reference) {
+        throw new Error(depositResult.message || "Failed to initiate payment");
+      }
+      toast({ title: "Payment prompt sent", description: "Enter your PIN on your phone to confirm" });
+      await pollPaymentStatus(depositResult.internal_reference);
+
       const expiry = new Date();
       if (renewPlan === "month") expiry.setMonth(expiry.getMonth() + 1);
       else expiry.setDate(expiry.getDate() + 7);
@@ -198,12 +211,22 @@ const Agent = () => {
         planExpiry: expiry.toISOString().split("T")[0],
         plan: renewPlan === "month" ? "Monthly" : "Weekly",
       });
+      await addTransaction({
+        userId: agentData.id,
+        userName: agentData.name,
+        userPhone: agentData.phone,
+        type: "subscription",
+        amount: renewPrice,
+        status: "completed",
+        method: "Mobile Money (Livra)",
+        createdAt: new Date().toISOString().split("T")[0],
+      } as any);
       setAgentData({ ...agentData, planExpiry: expiry.toISOString().split("T")[0], status: "active" });
       setShowRenewModal(false);
       setRenewNumber("");
       toast({ title: "Subscription renewed!" });
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Payment Failed", description: err.message, variant: "destructive" });
     }
     setIsProcessing(false);
   };
