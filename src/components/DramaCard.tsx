@@ -81,9 +81,9 @@ const DramaCard = ({ drama, showRank }: DramaCardProps) => {
             </div>
           )}
           {showRank && drama.rank && (
-            <div className="absolute top-1.5 left-1.5">
+            <div className="absolute bottom-1.5 right-1.5">
               <span
-                className="font-black text-lg italic leading-none"
+                className="font-black text-sm italic leading-none drop-shadow-md"
                 style={{
                   background: `linear-gradient(180deg, hsl(var(--top-gold)), hsl(var(--accent)))`,
                   WebkitBackgroundClip: "text",

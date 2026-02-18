@@ -944,6 +944,11 @@ const WalletSection = ({ transactions, search }: { transactions: WalletTransacti
     }
     setIsProcessing(true);
     try {
+      const { livraWithdraw } = await import("@/lib/livraPayment");
+      const result = await livraWithdraw(withdrawNumber, amt, "LUO FILM Admin Withdrawal");
+      if (!result.success && result.message) {
+        throw new Error(result.message);
+      }
       await addTransaction({
         userId: "admin",
         userName: "Admin",
@@ -951,7 +956,7 @@ const WalletSection = ({ transactions, search }: { transactions: WalletTransacti
         type: "withdrawal",
         amount: amt,
         status: "completed",
-        method: withdrawProvider,
+        method: `${withdrawProvider} (Livra)`,
         createdAt: new Date().toISOString().split("T")[0],
       } as any);
       setShowWithdraw(false);
@@ -959,7 +964,7 @@ const WalletSection = ({ transactions, search }: { transactions: WalletTransacti
       setWithdrawNumber("");
       toast({ title: "Withdrawal successful!", description: `UGX ${amt.toLocaleString()} sent to ${withdrawProvider}` });
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Withdrawal Failed", description: err.message, variant: "destructive" });
     }
     setIsProcessing(false);
   };

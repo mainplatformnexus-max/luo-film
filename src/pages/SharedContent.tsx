@@ -1,26 +1,26 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { Play, Phone, CreditCard, Timer, Clock, Film, CheckCircle, Lock, AlertCircle, Download } from "lucide-react";
+import { Play, Phone, CreditCard, Timer, Clock, Film, CheckCircle, Lock, AlertCircle, Download, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { getSharedLinkByCode, updateSharedLink, updateAgent, addTransaction, getAgentByAgentId } from "@/lib/firebaseServices";
 import type { SharedLink } from "@/lib/firebaseServices";
-import HLSPlayer from "@/components/HLSPlayer";
+import ArtPlayerComponent from "@/components/ArtPlayerComponent";
+import { livraDeposit, pollPaymentStatus } from "@/lib/livraPayment";
 
-type PaymentStep = "info" | "payment" | "processing" | "success" | "watching";
+type PaymentStep = "info" | "payment" | "processing" | "success" | "failed" | "watching";
 
 const SharedContent = () => {
   const { shareCode } = useParams<{ shareCode: string }>();
   const { toast } = useToast();
   const [step, setStep] = useState<PaymentStep>("info");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [provider, setProvider] = useState("MTN Mobile Money");
   const [timeLeft, setTimeLeft] = useState(600);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [content, setContent] = useState<SharedLink | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pollStatus, setPollStatus] = useState("");
 
-  // Load shared content from Firestore
   useEffect(() => {
     if (!shareCode) { setLoading(false); return; }
     getSharedLinkByCode(shareCode).then(data => {
@@ -29,7 +29,6 @@ const SharedContent = () => {
     }).catch(() => setLoading(false));
   }, [shareCode]);
 
-  // Countdown timer
   useEffect(() => {
     if (!isTimerRunning || timeLeft <= 0) {
       if (timeLeft <= 0 && isTimerRunning) {
@@ -55,8 +54,32 @@ const SharedContent = () => {
       return;
     }
     setStep("processing");
+    setPollStatus("Sending payment prompt to your phone...");
+
     try {
-      // Record transaction and update share stats
+      // 1. Initiate Livra deposit
+      const depositResult = await livraDeposit(
+        phoneNumber,
+        content.price,
+        `LUO FILM - Watch: ${content.contentTitle}`
+      );
+
+      if (!depositResult.internal_reference) {
+        throw new Error(depositResult.message || "Failed to initiate payment");
+      }
+
+      setPollStatus("Waiting for payment confirmation... Enter your PIN.");
+
+      // 2. Poll for status
+      await pollPaymentStatus(
+        depositResult.internal_reference,
+        (status) => {
+          if (status === "pending") setPollStatus("Waiting for confirmation...");
+          else if (status === "processing") setPollStatus("Processing...");
+        }
+      );
+
+      // 3. Payment successful - update share stats & credit agent
       await addTransaction({
         userId: "",
         userName: phoneNumber,
@@ -64,17 +87,16 @@ const SharedContent = () => {
         type: "agent-share",
         amount: content.price,
         status: "completed",
-        method: provider,
+        method: "Mobile Money (Livra)",
         createdAt: new Date().toISOString().split("T")[0],
       } as any);
 
-      // Update share link views/earnings
       await updateSharedLink(content.id, {
         views: (content.views || 0) + 1,
         earnings: (content.earnings || 0) + content.price,
       });
 
-      // Credit the agent's balance
+      // Credit agent balance
       try {
         const agent = await getAgentByAgentId(content.agentId);
         if (agent) {
@@ -92,8 +114,9 @@ const SharedContent = () => {
         setIsTimerRunning(true);
       }, 2000);
     } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-      setStep("payment");
+      console.error("Payment error:", err);
+      toast({ title: "Payment Failed", description: err.message, variant: "destructive" });
+      setStep("failed");
     }
   };
 
@@ -124,7 +147,7 @@ const SharedContent = () => {
       </div>
       <div className="aspect-video bg-muted relative max-w-4xl mx-auto">
         {content.streamLink ? (
-          <HLSPlayer src={content.streamLink} />
+          <ArtPlayerComponent src={content.streamLink} poster={content.posterUrl} autoplay />
         ) : (
           <>
             <img src={content.posterUrl || "/placeholder.svg"} alt={content.contentTitle} className="w-full h-full object-cover" />
@@ -141,15 +164,9 @@ const SharedContent = () => {
         <h1 className="text-foreground text-lg font-bold">{content.contentTitle}</h1>
         <p className="text-muted-foreground text-sm mt-1 capitalize">{content.contentType}</p>
         {content.streamLink && (
-          <a
-            href={content.streamLink}
-            download
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-2 bg-secondary border border-border text-foreground text-xs font-medium px-4 py-2 rounded-lg hover:bg-muted transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            Download Movie
+          <a href={content.streamLink} download target="_blank" rel="noopener noreferrer"
+            className="mt-3 inline-flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-[11px] font-medium hover:bg-primary/90 transition-colors">
+            <Download className="w-3.5 h-3.5" /> Download
           </a>
         )}
       </div>
@@ -204,14 +221,6 @@ const SharedContent = () => {
                 <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="e.g. 0771234567"
                   className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-foreground text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring" />
               </div>
-              <div>
-                <label className="text-muted-foreground text-[10px] block mb-1">Provider</label>
-                <select value={provider} onChange={(e) => setProvider(e.target.value)}
-                  className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-ring">
-                  <option>MTN Mobile Money</option>
-                  <option>Airtel Money</option>
-                </select>
-              </div>
             </div>
             <Button className="w-full text-xs h-10 gap-1" onClick={handlePay} disabled={!phoneNumber}>
               <CreditCard className="w-4 h-4" /> Pay UGX {content.price.toLocaleString()}
@@ -222,8 +231,10 @@ const SharedContent = () => {
 
         {step === "processing" && (
           <div className="bg-card border border-border rounded-xl p-8 text-center space-y-4">
-            <div className="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+            <Loader2 className="w-12 h-12 text-primary mx-auto animate-spin" />
             <p className="text-foreground text-sm font-semibold">Processing Payment</p>
+            <p className="text-muted-foreground text-xs">{pollStatus}</p>
+            <p className="text-muted-foreground text-[10px]">Do not close this page</p>
           </div>
         )}
 
@@ -232,6 +243,15 @@ const SharedContent = () => {
             <CheckCircle className="w-12 h-12 text-primary mx-auto" />
             <p className="text-foreground text-sm font-semibold">Payment Successful!</p>
             <p className="text-muted-foreground text-xs">Loading your content...</p>
+          </div>
+        )}
+
+        {step === "failed" && (
+          <div className="bg-card border border-border rounded-xl p-8 text-center space-y-4">
+            <X className="w-12 h-12 text-destructive mx-auto" />
+            <p className="text-foreground text-sm font-semibold">Payment Failed</p>
+            <p className="text-muted-foreground text-xs">Could not complete payment. Please try again.</p>
+            <Button className="w-full text-xs h-10" onClick={() => setStep("payment")}>Try Again</Button>
           </div>
         )}
       </div>
