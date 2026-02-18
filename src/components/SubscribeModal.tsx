@@ -34,6 +34,34 @@ const SubscribeModal = ({ open, onClose, mode = "user" }: SubscribeModalProps) =
 
   if (!open) return null;
 
+  if (!user && mode === "user") {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative w-full max-w-sm mx-4 bg-card border border-border rounded-2xl shadow-2xl p-8 text-center animate-in zoom-in-95 fade-in duration-200">
+          <button onClick={onClose} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+          <div className="w-12 h-12 bg-accent rounded-full flex items-center justify-center mx-auto mb-4">
+            <Crown className="w-6 h-6 text-accent-foreground" />
+          </div>
+          <h2 className="text-xl font-bold mb-2">Login Required</h2>
+          <p className="text-muted-foreground text-sm mb-6">Please log in to your account to subscribe to a plan.</p>
+          <button
+            onClick={() => {
+              onClose();
+              // Trigger login modal via some global state or just inform user
+              toast({ title: "Please Login", description: "Use the profile icon to log in first." });
+            }}
+            className="w-full h-10 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Got it
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const plans = mode === "agent" ? agentPlans : userPlans;
   const title = mode === "agent" ? "Agent 1X Plan" : "Subscribe";
   const subtitle = mode === "agent"
