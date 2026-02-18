@@ -1,7 +1,7 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Play, MessageSquare, Clock, Share2, Monitor, Smartphone, ChevronRight, Star, ArrowLeft, Download, Send, Trash2 } from "lucide-react";
-import { subscribeMovies, subscribeSeries, getEpisodesBySeries, subscribeComments, addComment, deleteComment, addWatchLater, subscribeWatchLater, deleteWatchLater } from "@/lib/firebaseServices";
-import type { EpisodeItem, CommentItem, WatchLaterItem } from "@/data/adminData";
+import { subscribeMovies, subscribeSeries, getEpisodesBySeries, subscribeComments, addComment, deleteComment, addWatchLater, subscribeWatchLater, deleteWatchLater, getUsers } from "@/lib/firebaseServices";
+import type { EpisodeItem, CommentItem, WatchLaterItem, UserItem } from "@/data/adminData";
 import SportPlayer from "@/components/SportPlayer";
 import ArtPlayerComponent from "@/components/ArtPlayerComponent";
 import { useState, useEffect } from "react";
@@ -107,9 +107,13 @@ const SportWatch = () => {
 };
 
 // ==================== HELPER: Check if user has active subscription ====================
-const hasActiveSubscription = (user: any): boolean => {
-  // In a real app, check Firestore user record for subscription status
-  return !!user;
+const hasActiveSubscription = (userRecord: any): boolean => {
+  if (!userRecord) return false;
+  if (!userRecord.subscription) return false;
+  if (userRecord.subscriptionExpiry) {
+    return new Date(userRecord.subscriptionExpiry) > new Date();
+  }
+  return true;
 };
 
 // ==================== DRAMA WATCH ====================
@@ -129,7 +133,17 @@ const Watch = () => {
   const [watchLaterItems, setWatchLaterItems] = useState<WatchLaterItem[]>([]);
   const [showSubscribe, setShowSubscribe] = useState(false);
   const [subscribeMode, setSubscribeMode] = useState<"user" | "agent">("user");
+  const [userRecord, setUserRecord] = useState<UserItem | null>(null);
   const isSport = id?.startsWith("sport-");
+
+  // Load user subscription data from Firestore
+  useEffect(() => {
+    if (!user) { setUserRecord(null); return; }
+    getUsers().then(users => {
+      const found = users.find(u => u.email === user.email);
+      setUserRecord(found || null);
+    }).catch(() => {});
+  }, [user]);
 
   const firebaseState = location.state as {
     firebaseId?: string;
@@ -301,8 +315,8 @@ const Watch = () => {
     toast({ title: "Install LUO FILM App", description: "Add to home screen from your browser menu for the best experience" });
   };
 
-  // If user not logged in or no subscription, show subscribe prompt
-  const requiresSubscription = !user;
+  // If user not logged in or no active subscription, show subscribe prompt
+  const requiresSubscription = !user || !hasActiveSubscription(userRecord);
 
   return (
     <div className="min-h-screen bg-background">
@@ -346,9 +360,9 @@ const Watch = () => {
 
           {/* Download Button */}
           {!requiresSubscription && (
-            <div className="px-4 py-2 border-b border-border">
-              <button onClick={handleDownload} className="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-lg text-xs font-medium hover:bg-primary/20 transition-colors w-full justify-center">
-                <Download className="w-4 h-4" /> Download Movie / Episode
+            <div className="px-4 py-2 border-b border-border flex justify-end">
+              <button onClick={handleDownload} className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-[11px] font-medium hover:bg-primary/90 transition-colors">
+                <Download className="w-3.5 h-3.5" /> Download
               </button>
             </div>
           )}
@@ -465,14 +479,23 @@ const Watch = () => {
               <div className="mb-6">
                 <h3 className="text-foreground text-sm font-bold mb-2">Cast</h3>
                 <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-2">
-                  {actorList.map((actor, i) => (
-                    <div key={i} className="flex flex-col items-center flex-shrink-0 w-16">
-                      <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center mb-1 border-2 border-border">
-                        <span className="text-foreground text-xs font-bold">{actor.charAt(0)}</span>
+                  {actorList.map((actor, i) => {
+                    const parts = actor.split("|").map(p => p.trim());
+                    const actorName = parts[0];
+                    const actorImage = parts[1] || "";
+                    return (
+                      <div key={i} className="flex flex-col items-center flex-shrink-0 w-16">
+                        <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center mb-1 border-2 border-border overflow-hidden">
+                          {actorImage ? (
+                            <img src={actorImage} alt={actorName} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-foreground text-xs font-bold">{actorName.charAt(0)}</span>
+                          )}
+                        </div>
+                        <span className="text-foreground text-[10px] text-center line-clamp-1">{actorName}</span>
                       </div>
-                      <span className="text-foreground text-[10px] text-center line-clamp-1">{actor}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

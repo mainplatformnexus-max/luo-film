@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { Play, Phone, CreditCard, Timer, Clock, Film, CheckCircle, Lock, AlertCircle, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { getSharedLinkByCode, updateSharedLink, updateAgent, addTransaction } from "@/lib/firebaseServices";
+import { getSharedLinkByCode, updateSharedLink, updateAgent, addTransaction, getAgentByAgentId } from "@/lib/firebaseServices";
 import type { SharedLink } from "@/lib/firebaseServices";
 import HLSPlayer from "@/components/HLSPlayer";
 
@@ -73,6 +73,17 @@ const SharedContent = () => {
         views: (content.views || 0) + 1,
         earnings: (content.earnings || 0) + content.price,
       });
+
+      // Credit the agent's balance
+      try {
+        const agent = await getAgentByAgentId(content.agentId);
+        if (agent) {
+          await updateAgent(agent.id, {
+            balance: (agent.balance || 0) + content.price,
+            totalEarnings: (agent.totalEarnings || 0) + content.price,
+          });
+        }
+      } catch (e) { console.error("Failed to credit agent:", e); }
 
       setStep("success");
       setTimeout(() => {
