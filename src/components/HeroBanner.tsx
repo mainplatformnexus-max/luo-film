@@ -69,13 +69,13 @@ const HeroBanner = () => {
   const slide = slides[current];
 
   return (
-    <div className="relative w-full h-[280px] md:h-[340px] overflow-hidden">
+    <div className="relative w-full aspect-[16/9] md:aspect-[21/9] overflow-hidden bg-black">
       {slides.map((s, i) => (
         <img
           key={i}
           src={s.image}
           alt={s.title}
-          className={`absolute inset-0 w-full h-full object-contain bg-black transition-opacity duration-700 ${i === current ? "opacity-100" : "opacity-0"}`}
+          className={`absolute inset-0 w-full h-full object-fill transition-opacity duration-700 ${i === current ? "opacity-100" : "opacity-0"}`}
           onError={(e) => { (e.target as HTMLImageElement).src = heroBanner; }}
         />
       ))}
