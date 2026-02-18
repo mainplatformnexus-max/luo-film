@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback } from "react";
 import { subscribeCarousels } from "@/lib/firebaseServices";
 import type { CarouselItem } from "@/data/adminData";
 import heroBanner from "@/assets/hero-banner.jpg";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 // Static fallback slide shown when no Firebase carousels are active
 const fallbackSlide = {
@@ -19,6 +21,7 @@ const fallbackSlide = {
 };
 
 const HeroBanner = () => {
+  const { user, setShowLogin } = useAuth();
   const [carousels, setCarousels] = useState<CarouselItem[]>([]);
   const [current, setCurrent] = useState(0);
 
@@ -27,6 +30,15 @@ const HeroBanner = () => {
       setCarousels(items.filter(c => c.isActive));
     });
   }, []);
+
+  const handlePlayClick = () => {
+    if (!user) {
+      setShowLogin(true);
+      toast.info("Please login to start watching");
+      return;
+    }
+    // Implement play logic or navigation if needed, currently it just prompts login
+  };
 
   const slides = carousels.map(c => ({
         image: c.imageUrl || heroBanner,
@@ -84,7 +96,10 @@ const HeroBanner = () => {
         </div>
         <p className="text-muted-foreground text-[9px] leading-relaxed mb-2.5 line-clamp-2">{slide.desc}</p>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 bg-primary text-primary-foreground px-4 py-1.5 rounded-full font-semibold text-[10px] hover:opacity-90 transition-opacity">
+          <button 
+            onClick={handlePlayClick}
+            className="flex items-center gap-1.5 bg-primary text-primary-foreground px-4 py-1.5 rounded-full font-semibold text-[10px] hover:opacity-90 transition-opacity"
+          >
             <Play className="w-3 h-3 fill-current" /> Play
           </button>
           <button className="flex items-center justify-center w-7 h-7 rounded-full border border-muted-foreground/40 text-foreground hover:border-foreground transition-colors">

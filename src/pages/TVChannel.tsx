@@ -2,8 +2,11 @@ import { useState, useEffect } from "react";
 import { subscribeTVChannels, subscribeLatestUpdates } from "@/lib/firebaseServices";
 import type { TVChannelItem, LatestUpdateItem } from "@/data/adminData";
 import ArtPlayerComponent from "@/components/ArtPlayerComponent";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 const TVChannel = () => {
+  const { user, setShowLogin } = useAuth();
   const [channels, setChannels] = useState<TVChannelItem[]>([]);
   const [activeChannel, setActiveChannel] = useState<TVChannelItem | null>(null);
   const [latestUpdates, setLatestUpdates] = useState<LatestUpdateItem[]>([]);
@@ -13,6 +16,17 @@ const TVChannel = () => {
     const unsub2 = subscribeLatestUpdates(setLatestUpdates);
     return () => { unsub1(); unsub2(); };
   }, []);
+
+  const handleChannelClick = (ch: TVChannelItem) => {
+    if (!user) {
+      setShowLogin(true);
+      toast.info("Please login to watch TV channels");
+      return;
+    }
+    if (ch.streamLink) {
+      setActiveChannel(ch);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -39,7 +53,7 @@ const TVChannel = () => {
           {channels.map((ch) => (
             <div
               key={ch.id}
-              onClick={() => ch.streamLink && setActiveChannel(ch)}
+              onClick={() => handleChannelClick(ch)}
               className="bg-card border border-border rounded-xl p-4 hover:border-primary/50 cursor-pointer transition-colors"
             >
               {ch.logoUrl ? (

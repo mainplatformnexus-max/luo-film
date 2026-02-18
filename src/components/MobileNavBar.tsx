@@ -9,8 +9,7 @@ import SubscribeModal from "./SubscribeModal";
 const MobileNavBar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
-  const [showLogin, setShowLogin] = useState(false);
+  const { user, logout, setShowLogin } = useAuth();
   const [showAgentAccess, setShowAgentAccess] = useState(false);
   const [showSubscribe, setShowSubscribe] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -108,7 +107,7 @@ const MobileNavBar = () => {
       {/* Spacer for content */}
       <div className="lg:hidden h-16" />
 
-      <LoginModal open={showLogin} onClose={() => setShowLogin(false)} />
+      <LoginModal open={useAuth().showLogin} onClose={() => useAuth().setShowLogin(false)} />
       <AgentAccessModal
         open={showAgentAccess}
         onClose={() => setShowAgentAccess(false)}
