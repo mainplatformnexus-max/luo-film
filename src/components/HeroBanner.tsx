@@ -69,7 +69,7 @@ const HeroBanner = () => {
   const slide = slides[current];
 
   return (
-    <div className="relative w-full aspect-[16/9] md:aspect-[21/9] overflow-hidden bg-black">
+    <div className="relative w-full aspect-[16/9] md:aspect-[3/1] lg:aspect-[4/1] overflow-hidden bg-black max-h-[400px]">
       {slides.map((s, i) => (
         <img
           key={i}
