@@ -3,7 +3,6 @@ import HeroBanner from "@/components/HeroBanner";
 import ContentRow from "@/components/ContentRow";
 import GenreTags from "@/components/GenreTags";
 import AppBanner from "@/components/AppBanner";
-import SportsSection from "@/components/SportsSection";
 import { subscribeMovies, subscribeSeries } from "@/lib/firebaseServices";
 import type { MovieItem, SeriesItem } from "@/data/adminData";
 import type { Drama } from "@/data/dramas";
@@ -113,7 +112,6 @@ const Index = () => {
         {onlySeries.length > 0 && <ContentRow title="📺 Series" dramas={onlySeries} />}
         {popular.length > 0 && <ContentRow title="Popular on LUO FILM" dramas={popular} />}
         {comingSoon.length > 0 && <ContentRow title="Coming Soon & Upcoming" dramas={comingSoon} />}
-        <SportsSection />
         <GenreTags />
         {topTen.length > 0 && <ContentRow title="Drama Selection" dramas={topTen} showRank />}
         {dramaSelection.length > 0 && <ContentRow title="Editor's Selection" dramas={dramaSelection} showRank />}
