@@ -3,6 +3,7 @@ import { X, Phone, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { getUserByPhone } from "@/lib/firebaseServices";
+import logo from "@/assets/logo.png";
 
 interface LoginModalProps {
   open: boolean;
@@ -68,7 +69,7 @@ const LoginModal = ({ open, onClose }: LoginModalProps) => {
         return;
       }
       await register(email, password, name, phone);
-      toast({ title: "Account created!", description: "Welcome to iQIYI." });
+      toast({ title: "Account created!", description: "Welcome to LUO FILM." });
       handleClose();
     } catch (err: any) {
       toast({ title: "Error", description: err.message || "Something went wrong", variant: "destructive" });
@@ -91,7 +92,7 @@ const LoginModal = ({ open, onClose }: LoginModalProps) => {
         return;
       }
       await register(email, password, name, phone);
-      toast({ title: "Account created!", description: "Welcome to iQIYI." });
+      toast({ title: "Account created!", description: "Welcome to LUO FILM." });
       handleClose();
     } catch (err: any) {
       toast({ title: "Error", description: err.message || "Something went wrong", variant: "destructive" });
@@ -121,15 +122,15 @@ const LoginModal = ({ open, onClose }: LoginModalProps) => {
           <button onClick={handleClose} className="absolute right-4 top-4 text-muted-foreground hover:text-foreground transition-colors">
             <X className="w-4 h-4" />
           </button>
-          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center mx-auto mb-3">
-            <span className="text-primary-foreground text-sm font-black">iQ</span>
+          <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mx-auto mb-3">
+            <img src={logo} alt="LUO FILM" className="w-8 h-8 rounded-lg object-contain" />
           </div>
           <h2 className="text-foreground font-bold text-lg">
             {mode === "login" ? "Welcome Back" : mode === "register" ? "Create Account" : "Complete Registration"}
           </h2>
           <p className="text-muted-foreground text-xs mt-1">
             {mode === "login" ? "Sign in with your phone number"
-              : mode === "register" ? "Join iQIYI for free"
+              : mode === "register" ? "Join LUO FILM for free"
               : "Phone not found – enter your details to register"}
           </p>
         </div>
