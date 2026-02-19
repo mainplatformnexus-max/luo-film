@@ -160,6 +160,25 @@ export interface WalletTransaction {
 }
 
 // Mock data generators
+export const adminSettings = {
+  basicInfo: {
+    logo: "LUO FILM",
+    description: "Luo Translated Movies | live ugandan tv channel | free download",
+    contactEmail: "support@luofilm.site",
+    facebookUrl: "https://facebook.com/luofilm",
+    twitterUrl: "https://twitter.com/luofilm",
+    instagramUrl: "https://instagram.com/luofilm"
+  },
+  stats: {
+    totalUsers: 1250,
+    activeSubscribers: 850,
+    totalRevenue: 4500000,
+    moviesCount: 450,
+    seriesCount: 120,
+    tvChannelsCount: 25
+  },
+};
+
 export const mockSeries: SeriesItem[] = [
   { id: "s1", name: "Eternal Love of the Fox", posterUrl: "", description: "A timeless love story spanning centuries", isPopular: true, isComingSoon: false, dramaSelectionPosition: 1, categories: ["Sweet Romance", "Ancient Costume"], genre: "Romance, Fantasy, Drama", actors: "Yang Mi, Mark Chao, Dilraba Dilmurat", isTopTen: true, isHotDrama: true, isOriginal: true, isVip: true, rating: 9.2, totalEpisodes: 38, createdAt: "2025-12-01" },
   { id: "s2", name: "Dating with You", posterUrl: "", description: "Modern romance in the digital age", isPopular: true, isComingSoon: false, dramaSelectionPosition: 2, categories: ["Sweet Romance"], genre: "Romance, Comedy", actors: "Zhao Lusi, Lin Yi", isTopTen: false, isHotDrama: true, isOriginal: false, isVip: false, rating: 8.5, totalEpisodes: 30, createdAt: "2025-11-15" },
@@ -185,16 +204,16 @@ export const mockCarousels: CarouselItem[] = [
 ];
 
 export const mockTVChannels: TVChannelItem[] = [
-  { id: "tv1", name: "iQIYI Drama", logoUrl: "", streamLink: "https://stream.example.com/tv1", category: "Drama", isLive: true, description: "24/7 Drama channel", createdAt: "2025-10-01" },
-  { id: "tv2", name: "iQIYI Sports", logoUrl: "", streamLink: "https://stream.example.com/tv2", category: "Sports", isLive: true, description: "Live sports coverage", createdAt: "2025-10-01" },
-  { id: "tv3", name: "iQIYI Movies", logoUrl: "", streamLink: "https://stream.example.com/tv3", category: "Movies", isLive: false, description: "Movie channel", createdAt: "2025-10-15" },
+  { id: "tv1", name: "LUO FILM Drama", logoUrl: "", streamLink: "https://stream.example.com/tv1", category: "Drama", isLive: true, description: "24/7 Drama channel", createdAt: "2025-10-01" },
+  { id: "tv2", name: "LUO FILM Sports", logoUrl: "", streamLink: "https://stream.example.com/tv2", category: "Sports", isLive: true, description: "Live sports coverage", createdAt: "2025-10-01" },
+  { id: "tv3", name: "LUO FILM Movies", logoUrl: "", streamLink: "https://stream.example.com/tv3", category: "Movies", isLive: false, description: "Movie channel", createdAt: "2025-10-15" },
 ];
 
 export const mockActivities: UserActivity[] = [
   { id: "a1", userId: "u1", userName: "John Doe", userPhone: "+256700111222", action: "watch", details: "Watched Eternal Love Ep 1", page: "/watch/s1e1", timestamp: "2025-12-10 14:30", ip: "192.168.1.1", device: "Android - Chrome" },
   { id: "a2", userId: "u2", userName: "Jane Smith", userPhone: "+256700333444", action: "click", details: "Clicked Subscribe button", page: "/", timestamp: "2025-12-10 15:00", ip: "192.168.1.2", device: "iPhone - Safari" },
   { id: "a3", userId: "u1", userName: "John Doe", userPhone: "+256700111222", action: "navigate", details: "Navigated to Movies page", page: "/movies", timestamp: "2025-12-10 15:15", ip: "192.168.1.1", device: "Android - Chrome" },
-  { id: "a4", userId: "u3", userName: "Peter Kasule", userPhone: "+256700555666", action: "download", details: "Downloaded iQIYI App", page: "/", timestamp: "2025-12-10 16:00", ip: "10.0.0.5", device: "Windows - Firefox" },
+  { id: "a4", userId: "u3", userName: "Peter Kasule", userPhone: "+256700555666", action: "download", details: "Downloaded LUO FILM App", page: "/", timestamp: "2025-12-10 16:00", ip: "10.0.0.5", device: "Windows - Firefox" },
   { id: "a5", userId: "u2", userName: "Jane Smith", userPhone: "+256700333444", action: "watch", details: "Watched Detective Mystery", page: "/watch/m2", timestamp: "2025-12-10 17:30", ip: "192.168.1.2", device: "iPhone - Safari" },
 ];
 
