@@ -1,33 +1,82 @@
-// Livra Payment API Integration
+// Payment API Integration
+// Fincra Checkout for deposits, Livra for withdrawals
+const PAYMENT_BASE = "https://payment.livrauganda.workers.dev";
 const LIVRA_BASE = "https://api.livrauganda.workers.dev/api";
 
-// Format phone number to +256 format
-const formatPhone = (phone: string): string => {
-  let cleaned = phone.replace(/\s+/g, "").replace(/-/g, "");
-  if (cleaned.startsWith("0")) cleaned = "+256" + cleaned.slice(1);
-  else if (cleaned.startsWith("256")) cleaned = "+" + cleaned;
-  else if (!cleaned.startsWith("+256")) cleaned = "+256" + cleaned;
-  return cleaned;
+// ---- Fincra Checkout (Deposits/Payments) ----
+
+export interface CheckoutResponse {
+  success: boolean;
+  data?: {
+    redirectUrl: string;
+    reference: string;
+    amount: number;
+    currency: string;
+  };
+  message?: string;
+}
+
+export interface PendingPayment {
+  reference: string;
+  type: "subscription" | "agent-subscription" | "agent-renewal" | "agent-share";
+  amount: number;
+  planId?: string;
+  planLabel?: string;
+  planDays?: number;
+  agentName?: string;
+  agentPhone?: string;
+  renewPlan?: string;
+  contentId?: string;
+  shareCode?: string;
+  userEmail?: string;
+  phoneNumber?: string;
+  timestamp: number;
+}
+
+// Initiate a checkout redirect for payment
+export const createCheckout = async (
+  amount: number,
+  email: string,
+  metadata: Record<string, string> = {}
+): Promise<CheckoutResponse> => {
+  const origin = window.location.origin;
+  const res = await fetch(`${PAYMENT_BASE}/checkout/redirect`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      amount,
+      currency: "UGX",
+      email: email || "customer@luofilm.site",
+      successUrl: `${origin}/payment/callback?status=success`,
+      failureUrl: `${origin}/payment/callback?status=failed`,
+      metadata,
+      paymentMethods: ["mobile_money", "card"],
+    }),
+  });
+  return res.json();
 };
 
-export interface LivraDepositResponse {
-  success: boolean;
-  internal_reference?: string;
-  message?: string;
-  [key: string]: any;
-}
+// Save pending payment to localStorage before redirect
+export const savePendingPayment = (payment: PendingPayment) => {
+  localStorage.setItem("pending_payment", JSON.stringify(payment));
+};
 
-export interface LivraStatusResponse {
-  success: boolean;
-  status: string;
-  request_status: string;
-  message?: string;
-  amount?: number;
-  provider?: string;
-  provider_transaction_id?: string;
-  completed_at?: string;
-  [key: string]: any;
-}
+// Get and clear pending payment after redirect
+export const getPendingPayment = (): PendingPayment | null => {
+  const raw = localStorage.getItem("pending_payment");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
+export const clearPendingPayment = () => {
+  localStorage.removeItem("pending_payment");
+};
+
+// ---- Livra Withdraw (Send money to user) ----
 
 export interface LivraWithdrawResponse {
   success: boolean;
@@ -36,92 +85,20 @@ export interface LivraWithdrawResponse {
   [key: string]: any;
 }
 
-// Initiate a deposit (request payment from user)
-export const livraDeposit = async (
-  phone: string,
-  amount: number,
-  description: string
-): Promise<LivraDepositResponse> => {
-  const res = await fetch(`${LIVRA_BASE}/deposit`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      msisdn: formatPhone(phone),
-      amount,
-      description,
-    }),
-  });
-  return res.json();
-};
-
-// Initiate a withdrawal (send money to user)
 export const livraWithdraw = async (
   phone: string,
   amount: number,
   description: string
 ): Promise<LivraWithdrawResponse> => {
+  let cleaned = phone.replace(/\s+/g, "").replace(/-/g, "");
+  if (cleaned.startsWith("0")) cleaned = "+256" + cleaned.slice(1);
+  else if (cleaned.startsWith("256")) cleaned = "+" + cleaned;
+  else if (!cleaned.startsWith("+256")) cleaned = "+256" + cleaned;
+
   const res = await fetch(`${LIVRA_BASE}/withdraw`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      msisdn: formatPhone(phone),
-      amount,
-      description,
-    }),
+    body: JSON.stringify({ msisdn: cleaned, amount, description }),
   });
   return res.json();
-};
-
-// Check payment status
-export const livraCheckStatus = async (
-  internalReference: string
-): Promise<LivraStatusResponse> => {
-  const res = await fetch(
-    `${LIVRA_BASE}/request-status?internal_reference=${internalReference}`
-  );
-  return res.json();
-};
-
-// Poll payment status until success/failure
-export const pollPaymentStatus = (
-  internalReference: string,
-  onStatusUpdate?: (status: string, data: LivraStatusResponse) => void
-): Promise<LivraStatusResponse> => {
-  const MAX_RETRIES = 40; // ~4 minutes
-  const INTERVAL = 6000; // 6 seconds
-  let attempts = 0;
-
-  return new Promise((resolve, reject) => {
-    const intervalId = setInterval(async () => {
-      attempts++;
-      try {
-        const data = await livraCheckStatus(internalReference);
-        console.log(`Payment poll #${attempts}:`, data);
-
-        onStatusUpdate?.(data.request_status || data.status, data);
-
-        if (data.request_status === "success") {
-          clearInterval(intervalId);
-          resolve(data);
-        } else if (
-          data.request_status === "failed" ||
-          data.status === "failed" ||
-          data.request_status === "expired"
-        ) {
-          clearInterval(intervalId);
-          reject(new Error(data.message || "Payment failed"));
-        } else if (attempts >= MAX_RETRIES) {
-          clearInterval(intervalId);
-          reject(new Error("Payment timed out. Please try again."));
-        }
-        // Otherwise keep polling (pending state)
-      } catch (error) {
-        console.error("Poll error:", error);
-        if (attempts >= MAX_RETRIES) {
-          clearInterval(intervalId);
-          reject(error);
-        }
-      }
-    }, INTERVAL);
-  });
 };
