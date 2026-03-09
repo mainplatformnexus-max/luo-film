@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { X, Crown, Phone, CheckCircle, Smartphone, Loader2 } from "lucide-react";
-import { addAgent, generateAgentId, addTransaction, updateUser, getUsers } from "@/lib/firebaseServices";
-import { livraDeposit, pollPaymentStatus } from "@/lib/livraPayment";
+import { X, Crown, Phone, Smartphone, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { createCheckout, savePendingPayment } from "@/lib/livraPayment";
 
 interface SubscribeModalProps {
   open: boolean;
@@ -25,10 +24,9 @@ const agentPlans = [
 const SubscribeModal = ({ open, onClose, mode = "user" }: SubscribeModalProps) => {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [step, setStep] = useState<"plan" | "pay" | "processing" | "success" | "failed">("plan");
-  const [generatedAgentId, setGeneratedAgentId] = useState("");
-  const [pollStatus, setPollStatus] = useState("Sending payment prompt...");
+  const [step, setStep] = useState<"plan" | "pay" | "redirecting">("plan");
   const { toast } = useToast();
   const { user, setShowLogin } = useAuth();
 
@@ -37,7 +35,7 @@ const SubscribeModal = ({ open, onClose, mode = "user" }: SubscribeModalProps) =
   if (!user && mode === "user") {
     onClose();
     setShowLogin(true);
-    toast({ title: "Login Required", description: "Please log in to your account to subscribe to a plan." });
+    toast({ title: "Login Required", description: "Please log in to subscribe." });
     return null;
   }
 
@@ -49,99 +47,42 @@ const SubscribeModal = ({ open, onClose, mode = "user" }: SubscribeModalProps) =
 
   const handlePay = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (phoneNumber.length < 10) return;
-
     const planInfo = plans.find(p => p.id === selectedPlan);
     if (!planInfo) return;
 
-    setStep("processing");
-    setPollStatus("Sending payment prompt to your phone...");
+    setStep("redirecting");
 
     try {
-      // 1. Initiate Livra deposit
-      const depositDesc = mode === "agent"
-        ? `LUO FILM Agent ${planInfo.label} Plan`
-        : `LUO FILM ${planInfo.label} Subscription`;
+      const userEmail = email || user?.email || "customer@luofilm.site";
+      const result = await createCheckout(planInfo.priceNum, userEmail, {
+        type: mode === "agent" ? "agent-subscription" : "subscription",
+        planId: planInfo.id,
+      });
 
-      const depositResult = await livraDeposit(phoneNumber, planInfo.priceNum, depositDesc);
-
-      if (!depositResult.internal_reference) {
-        throw new Error(depositResult.message || "Failed to initiate payment");
+      if (!result.success || !result.data?.redirectUrl) {
+        throw new Error(result.message || "Failed to create checkout");
       }
 
-      setPollStatus("Waiting for payment confirmation... Enter your PIN on your phone.");
-
-      // 2. Poll for payment status
-      const paymentResult = await pollPaymentStatus(
-        depositResult.internal_reference,
-        (status) => {
-          if (status === "pending") setPollStatus("Waiting for payment confirmation...");
-          else if (status === "processing") setPollStatus("Processing payment...");
-        }
-      );
-
-      // 3. Payment successful - activate subscription
-      const now = new Date();
-      const expiry = new Date(now);
-      expiry.setDate(expiry.getDate() + planInfo.days);
-
-      if (mode === "agent") {
-        const newAgentId = generateAgentId();
-        await addAgent({
-          name: name || phoneNumber,
-          phone: phoneNumber,
-          agentId: newAgentId,
-          balance: 0,
-          sharedMovies: 0,
-          sharedSeries: 0,
-          totalEarnings: 0,
-          status: "active",
-          plan: planInfo.label,
-          planExpiry: expiry.toISOString().split("T")[0],
-          createdAt: now.toISOString().split("T")[0],
-        } as any);
-        setGeneratedAgentId(newAgentId);
-      } else if (user) {
-        // Update user subscription in Firestore
-        const users = await getUsers();
-        const userRecord = users.find(u => u.email === user.email);
-        if (userRecord) {
-          await updateUser(userRecord.id, {
-            subscription: planInfo.label,
-            subscriptionExpiry: expiry.toISOString().split("T")[0],
-          });
-        }
-      }
-
-      // Record transaction
-      await addTransaction({
-        userId: user?.uid || "",
-        userName: name || user?.displayName || phoneNumber,
-        userPhone: phoneNumber,
-        type: "subscription",
+      // Save pending payment info
+      savePendingPayment({
+        reference: result.data.reference,
+        type: mode === "agent" ? "agent-subscription" : "subscription",
         amount: planInfo.priceNum,
-        status: "completed",
-        method: `Mobile Money (${paymentResult.provider || "Livra"})`,
-        createdAt: now.toISOString().split("T")[0],
-      } as any);
+        planId: planInfo.id,
+        planLabel: planInfo.label,
+        planDays: planInfo.days,
+        agentName: name || undefined,
+        agentPhone: phoneNumber || undefined,
+        userEmail,
+        phoneNumber,
+        timestamp: Date.now(),
+      });
 
-      setStep("success");
+      // Redirect to payment page
+      window.location.href = result.data.redirectUrl;
     } catch (err: any) {
-      console.error("Payment error:", err);
-      // Record failed transaction
-      await addTransaction({
-        userId: user?.uid || "",
-        userName: name || user?.displayName || phoneNumber,
-        userPhone: phoneNumber,
-        type: "subscription",
-        amount: planInfo.priceNum,
-        status: "failed",
-        method: "Mobile Money (Livra)",
-        createdAt: new Date().toISOString().split("T")[0],
-      } as any).catch(() => {});
-
-      toast({ title: "Payment Failed", description: err.message || "Could not complete payment", variant: "destructive" });
-      setStep("failed");
+      toast({ title: "Payment Error", description: err.message, variant: "destructive" });
+      setStep("pay");
     }
   };
 
@@ -149,9 +90,8 @@ const SubscribeModal = ({ open, onClose, mode = "user" }: SubscribeModalProps) =
     setStep("plan");
     setSelectedPlan(null);
     setPhoneNumber("");
+    setEmail("");
     setName("");
-    setGeneratedAgentId("");
-    setPollStatus("");
     onClose();
   };
 
@@ -196,77 +136,49 @@ const SubscribeModal = ({ open, onClose, mode = "user" }: SubscribeModalProps) =
         {step === "pay" && (
           <form onSubmit={handlePay} className="px-6 pb-6 space-y-4">
             <div className="bg-secondary rounded-xl p-4 text-center">
-              <p className="text-muted-foreground text-[11px]">Pay with Mobile Money</p>
+              <p className="text-muted-foreground text-[11px]">Pay securely</p>
               <div className="flex items-center justify-center gap-3 mt-2">
                 <Smartphone className="w-5 h-5 text-accent" />
                 <span className="text-foreground font-bold text-lg">
                   UGX {plans.find((p) => p.id === selectedPlan)?.price}
                 </span>
               </div>
+              <p className="text-muted-foreground text-[10px] mt-2">Mobile Money, Card, or Bank Transfer</p>
             </div>
             {mode === "agent" && (
-              <div className="relative">
+              <>
                 <input type="text" placeholder="Your Name" value={name} onChange={(e) => setName(e.target.value)} required
                   className="w-full h-10 px-3 rounded-lg bg-secondary border border-border text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
-              </div>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <input type="tel" placeholder="Phone Number (07...)" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} required
+                    className="w-full h-10 pl-10 pr-3 rounded-lg bg-secondary border border-border text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                </div>
+              </>
             )}
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input type="tel" placeholder="Mobile Money Number (07...)" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} required
-                className="w-full h-10 pl-10 pr-3 rounded-lg bg-secondary border border-border text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
-            </div>
+            <input type="email" placeholder="Email address" value={email || user?.email || ""} onChange={(e) => setEmail(e.target.value)}
+              className="w-full h-10 px-3 rounded-lg bg-secondary border border-border text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50" />
             <p className="text-muted-foreground text-[10px] text-center">
-              A payment prompt will be sent to your phone. Enter your PIN to confirm.
+              You'll be redirected to a secure payment page to complete payment.
             </p>
             <div className="flex gap-2">
               <button type="button" onClick={() => setStep("plan")} className="flex-1 h-10 bg-secondary text-foreground font-medium text-sm rounded-lg hover:bg-muted transition-colors">
                 Back
               </button>
-              <button type="submit" className="flex-1 h-10 bg-primary text-primary-foreground font-semibold text-sm rounded-lg hover:bg-primary/90 transition-colors">
-                Pay Now
+              <button type="submit" className="flex-1 h-10 bg-primary text-primary-foreground font-semibold text-sm rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-1.5">
+                <ExternalLink className="w-3.5 h-3.5" /> Pay Now
               </button>
             </div>
           </form>
         )}
 
-        {step === "processing" && (
+        {step === "redirecting" && (
           <div className="px-6 pb-6 text-center space-y-4">
-            <Loader2 className="w-12 h-12 text-primary mx-auto animate-spin" />
+            <div className="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
             <div>
-              <p className="text-foreground font-bold text-base">Processing Payment</p>
-              <p className="text-muted-foreground text-xs mt-1">{pollStatus}</p>
-              <p className="text-muted-foreground text-[10px] mt-3">Do not close this window</p>
+              <p className="text-foreground font-bold text-base">Redirecting to payment...</p>
+              <p className="text-muted-foreground text-xs mt-1">You'll be taken to a secure checkout page</p>
             </div>
-          </div>
-        )}
-
-        {step === "success" && (
-          <div className="px-6 pb-6 text-center space-y-4">
-            <CheckCircle className="w-12 h-12 text-primary mx-auto" />
-            <div>
-              <p className="text-foreground font-bold text-base">Payment Successful!</p>
-              <p className="text-muted-foreground text-xs mt-1">
-                {mode === "agent"
-                  ? <>Your Agent ID: <span className="text-primary font-bold text-base">{generatedAgentId}</span><br/><span className="text-[10px]">Save this ID — you'll use it to log in to the Agent Dashboard</span></>
-                  : "Your subscription is now active. Enjoy unlimited streaming!"}
-              </p>
-            </div>
-            <button onClick={handleClose} className="w-full h-10 bg-primary text-primary-foreground font-semibold text-sm rounded-lg hover:bg-primary/90 transition-colors">
-              {mode === "agent" ? "Done" : "Start Watching"}
-            </button>
-          </div>
-        )}
-
-        {step === "failed" && (
-          <div className="px-6 pb-6 text-center space-y-4">
-            <X className="w-12 h-12 text-destructive mx-auto" />
-            <div>
-              <p className="text-foreground font-bold text-base">Payment Failed</p>
-              <p className="text-muted-foreground text-xs mt-1">The payment could not be completed. Please try again.</p>
-            </div>
-            <button onClick={() => setStep("pay")} className="w-full h-10 bg-primary text-primary-foreground font-semibold text-sm rounded-lg hover:bg-primary/90 transition-colors">
-              Try Again
-            </button>
           </div>
         )}
       </div>

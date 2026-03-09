@@ -1,28 +1,44 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { Play, Phone, CreditCard, Timer, Clock, Film, CheckCircle, Lock, AlertCircle, Download, Loader2, X } from "lucide-react";
+import { Play, CreditCard, Timer, Lock, AlertCircle, Download, X, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { getSharedLinkByCode, updateSharedLink, updateAgent, addTransaction, getAgentByAgentId } from "@/lib/firebaseServices";
+import { getSharedLinkByCode } from "@/lib/firebaseServices";
 import type { SharedLink } from "@/lib/firebaseServices";
 import ArtPlayerComponent from "@/components/ArtPlayerComponent";
-import { livraDeposit, pollPaymentStatus } from "@/lib/livraPayment";
+import { createCheckout, savePendingPayment } from "@/lib/livraPayment";
 
-type PaymentStep = "info" | "payment" | "processing" | "success" | "failed" | "watching";
+type PaymentStep = "info" | "payment" | "redirecting" | "watching";
 
 const SharedContent = () => {
   const { shareCode } = useParams<{ shareCode: string }>();
   const { toast } = useToast();
   const [step, setStep] = useState<PaymentStep>("info");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [email, setEmail] = useState("");
   const [timeLeft, setTimeLeft] = useState(600);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [content, setContent] = useState<SharedLink | null>(null);
   const [loading, setLoading] = useState(true);
-  const [pollStatus, setPollStatus] = useState("");
 
+  // Check if user already has access from a successful payment callback
   useEffect(() => {
     if (!shareCode) { setLoading(false); return; }
+    const accessTimestamp = sessionStorage.getItem(`access_${shareCode}`);
+    if (accessTimestamp) {
+      const elapsed = (Date.now() - parseInt(accessTimestamp)) / 1000;
+      if (elapsed < 600) {
+        getSharedLinkByCode(shareCode).then(data => {
+          setContent(data);
+          setStep("watching");
+          setTimeLeft(600 - Math.floor(elapsed));
+          setIsTimerRunning(true);
+          setLoading(false);
+        }).catch(() => setLoading(false));
+        return;
+      } else {
+        sessionStorage.removeItem(`access_${shareCode}`);
+      }
+    }
     getSharedLinkByCode(shareCode).then(data => {
       setContent(data);
       setLoading(false);
@@ -34,6 +50,7 @@ const SharedContent = () => {
       if (timeLeft <= 0 && isTimerRunning) {
         setIsTimerRunning(false);
         setStep("info");
+        if (shareCode) sessionStorage.removeItem(`access_${shareCode}`);
         toast({ title: "Access expired", description: "Your 10-minute access has ended.", variant: "destructive" });
       }
       return;
@@ -49,74 +66,31 @@ const SharedContent = () => {
   };
 
   const handlePay = async () => {
-    if (!phoneNumber || !content) {
-      toast({ title: "Enter phone number", variant: "destructive" });
-      return;
-    }
-    setStep("processing");
-    setPollStatus("Sending payment prompt to your phone...");
+    if (!content || !shareCode) return;
+    setStep("redirecting");
 
     try {
-      // 1. Initiate Livra deposit
-      const depositResult = await livraDeposit(
-        phoneNumber,
-        content.price,
-        `LUO FILM - Watch: ${content.contentTitle}`
-      );
-
-      if (!depositResult.internal_reference) {
-        throw new Error(depositResult.message || "Failed to initiate payment");
-      }
-
-      setPollStatus("Waiting for payment confirmation... Enter your PIN.");
-
-      // 2. Poll for status
-      await pollPaymentStatus(
-        depositResult.internal_reference,
-        (status) => {
-          if (status === "pending") setPollStatus("Waiting for confirmation...");
-          else if (status === "processing") setPollStatus("Processing...");
-        }
-      );
-
-      // 3. Payment successful - update share stats & credit agent
-      await addTransaction({
-        userId: "",
-        userName: phoneNumber,
-        userPhone: phoneNumber,
+      const result = await createCheckout(content.price, email || "customer@luofilm.site", {
         type: "agent-share",
-        amount: content.price,
-        status: "completed",
-        method: "Mobile Money (Livra)",
-        createdAt: new Date().toISOString().split("T")[0],
-      } as any);
-
-      await updateSharedLink(content.id, {
-        views: (content.views || 0) + 1,
-        earnings: (content.earnings || 0) + content.price,
+        shareCode,
       });
 
-      // Credit agent balance
-      try {
-        const agent = await getAgentByAgentId(content.agentId);
-        if (agent) {
-          await updateAgent(agent.id, {
-            balance: (agent.balance || 0) + content.price,
-            totalEarnings: (agent.totalEarnings || 0) + content.price,
-          });
-        }
-      } catch (e) { console.error("Failed to credit agent:", e); }
+      if (!result.success || !result.data?.redirectUrl) {
+        throw new Error(result.message || "Failed to create checkout");
+      }
 
-      setStep("success");
-      setTimeout(() => {
-        setStep("watching");
-        setTimeLeft(600);
-        setIsTimerRunning(true);
-      }, 2000);
+      savePendingPayment({
+        reference: result.data.reference,
+        type: "agent-share",
+        amount: content.price,
+        shareCode,
+        timestamp: Date.now(),
+      });
+
+      window.location.href = result.data.redirectUrl;
     } catch (err: any) {
-      console.error("Payment error:", err);
-      toast({ title: "Payment Failed", description: err.message, variant: "destructive" });
-      setStep("failed");
+      toast({ title: "Payment Error", description: err.message, variant: "destructive" });
+      setStep("payment");
     }
   };
 
@@ -217,41 +191,23 @@ const SharedContent = () => {
             </div>
             <div className="space-y-3">
               <div>
-                <label className="text-muted-foreground text-[10px] block mb-1">Mobile Money Number</label>
-                <input type="tel" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="e.g. 0771234567"
+                <label className="text-muted-foreground text-[10px] block mb-1">Email (optional)</label>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com"
                   className="w-full bg-secondary border border-border rounded-lg px-3 py-2.5 text-foreground text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring" />
               </div>
             </div>
-            <Button className="w-full text-xs h-10 gap-1" onClick={handlePay} disabled={!phoneNumber}>
-              <CreditCard className="w-4 h-4" /> Pay UGX {content.price.toLocaleString()}
+            <Button className="w-full text-xs h-10 gap-1" onClick={handlePay}>
+              <ExternalLink className="w-4 h-4" /> Pay UGX {content.price.toLocaleString()}
             </Button>
             <button onClick={() => setStep("info")} className="w-full text-muted-foreground text-[10px] text-center mt-1 hover:text-foreground">← Go back</button>
           </div>
         )}
 
-        {step === "processing" && (
+        {step === "redirecting" && (
           <div className="bg-card border border-border rounded-xl p-8 text-center space-y-4">
-            <Loader2 className="w-12 h-12 text-primary mx-auto animate-spin" />
-            <p className="text-foreground text-sm font-semibold">Processing Payment</p>
-            <p className="text-muted-foreground text-xs">{pollStatus}</p>
-            <p className="text-muted-foreground text-[10px]">Do not close this page</p>
-          </div>
-        )}
-
-        {step === "success" && (
-          <div className="bg-card border border-border rounded-xl p-8 text-center space-y-4">
-            <CheckCircle className="w-12 h-12 text-primary mx-auto" />
-            <p className="text-foreground text-sm font-semibold">Payment Successful!</p>
-            <p className="text-muted-foreground text-xs">Loading your content...</p>
-          </div>
-        )}
-
-        {step === "failed" && (
-          <div className="bg-card border border-border rounded-xl p-8 text-center space-y-4">
-            <X className="w-12 h-12 text-destructive mx-auto" />
-            <p className="text-foreground text-sm font-semibold">Payment Failed</p>
-            <p className="text-muted-foreground text-xs">Could not complete payment. Please try again.</p>
-            <Button className="w-full text-xs h-10" onClick={() => setStep("payment")}>Try Again</Button>
+            <div className="w-12 h-12 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-foreground text-sm font-semibold">Redirecting to payment...</p>
+            <p className="text-muted-foreground text-xs">You'll be taken to a secure checkout page</p>
           </div>
         )}
       </div>

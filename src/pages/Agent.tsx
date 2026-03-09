@@ -191,44 +191,32 @@ const Agent = () => {
   };
 
   const handleRenew = async () => {
-    if (!renewNumber || !agentData) return;
+    if (!agentData) return;
     setIsProcessing(true);
     try {
-      const { livraDeposit, pollPaymentStatus } = await import("@/lib/livraPayment");
-      const depositResult = await livraDeposit(renewNumber, renewPrice, `LUO FILM Agent Renewal - ${renewPlan === "month" ? "Monthly" : "Weekly"}`);
-      if (!depositResult.internal_reference) {
-        throw new Error(depositResult.message || "Failed to initiate payment");
-      }
-      toast({ title: "Payment prompt sent", description: "Enter your PIN on your phone to confirm" });
-      await pollPaymentStatus(depositResult.internal_reference);
-
-      const expiry = new Date();
-      if (renewPlan === "month") expiry.setMonth(expiry.getMonth() + 1);
-      else expiry.setDate(expiry.getDate() + 7);
-
-      await updateAgent(agentData.id, {
-        status: "active",
-        planExpiry: expiry.toISOString().split("T")[0],
-        plan: renewPlan === "month" ? "Monthly" : "Weekly",
+      const { createCheckout, savePendingPayment } = await import("@/lib/livraPayment");
+      const result = await createCheckout(renewPrice, "agent@luofilm.site", {
+        type: "agent-renewal",
+        renewPlan,
       });
-      await addTransaction({
-        userId: agentData.id,
-        userName: agentData.name,
-        userPhone: agentData.phone,
-        type: "subscription",
+      if (!result.success || !result.data?.redirectUrl) {
+        throw new Error(result.message || "Failed to create checkout");
+      }
+      savePendingPayment({
+        reference: result.data.reference,
+        type: "agent-renewal",
         amount: renewPrice,
-        status: "completed",
-        method: "Mobile Money (Livra)",
-        createdAt: new Date().toISOString().split("T")[0],
-      } as any);
-      setAgentData({ ...agentData, planExpiry: expiry.toISOString().split("T")[0], status: "active" });
-      setShowRenewModal(false);
-      setRenewNumber("");
-      toast({ title: "Subscription renewed!" });
+        renewPlan,
+        agentPhone: agentData.agentId,
+        agentName: agentData.name,
+        phoneNumber: agentData.phone,
+        timestamp: Date.now(),
+      });
+      window.location.href = result.data.redirectUrl;
     } catch (err: any) {
       toast({ title: "Payment Failed", description: err.message, variant: "destructive" });
+      setIsProcessing(false);
     }
-    setIsProcessing(false);
   };
 
   const renewPrice = renewPlan === "week" ? 20000 : 30000;
