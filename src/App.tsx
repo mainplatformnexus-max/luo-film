@@ -37,6 +37,7 @@ const App = () => (
             <Route path="/live-sport" element={<LiveSport />} />
             <Route path="/agent" element={<Agent />} />
             <Route path="/shared/:shareCode" element={<SharedContent />} />
+            <Route path="/payment/callback" element={<PaymentCallback />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
